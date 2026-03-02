@@ -1,0 +1,15 @@
+{
+  "title": "露营日记",
+  "content": "今天分享一次周末露营体验，风景很好。",
+  "images": [
+    "http://example.com/image1.jpg",
+    "http://example.com/image2.jpg"
+  ],
+  "tags": [
+    "露营",
+    "周末生活"
+  ],
+  "products": [],
+  "is_original": false,
+  "visibility": "公开可见"
+}

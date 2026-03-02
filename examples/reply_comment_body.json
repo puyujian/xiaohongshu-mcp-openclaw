@@ -1,0 +1,7 @@
+{
+  "feed_id": "64f1a2b3c4d5e6f7a8b9c0d1",
+  "xsec_token": "security_token_here",
+  "comment_id": "comment_id_to_reply",
+  "user_id": "target_user_id",
+  "content": "谢谢你的评论，欢迎交流。"
+}

@@ -1,0 +1,11 @@
+{
+  "feed_id": "64f1a2b3c4d5e6f7a8b9c0d1",
+  "xsec_token": "security_token_here",
+  "load_all_comments": false,
+  "comment_config": {
+    "click_more_replies": true,
+    "max_replies_threshold": 50,
+    "max_comment_items": 100,
+    "scroll_speed": "normal"
+  }
+}

@@ -1,0 +1,11 @@
+{
+  "title": "露营视频记录",
+  "content": "记录搭帐篷和夜晚篝火的过程。",
+  "video": "/absolute/path/to/video.mp4",
+  "tags": [
+    "露营",
+    "Vlog"
+  ],
+  "products": [],
+  "visibility": "公开可见"
+}
