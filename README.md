@@ -24,7 +24,8 @@ xiaohongshu-mcp-openclaw/
 │   ├── publish_video_body.json
 │   ├── reply_comment_body.json
 │   ├── search_body.json
-│   └── user_profile_body.json
+│   ├── user_profile_body.json
+│   └── batch_tasks.json
 └── scripts/
     └── xhs_api_client.py
 ```
@@ -67,6 +68,7 @@ python scripts/xhs_api_client.py --ip 127.0.0.1 --user-id user1 list-feeds
 - `list-accounts`
 - `manager-list-users`
 - `manager-get-user`
+- `batch-run`（批量执行）
 
 也保留了旧命名（如 `login-status`、`feeds-list`、`comment`）以兼容已有调用。
 
@@ -119,13 +121,53 @@ python scripts/xhs_api_client.py --ip 127.0.0.1 favorite_feed \
   --feed-id "64f1a2..." --xsec-token "token_here" --unfavorite
 ```
 
+## OpenClaw 推荐流程
+
+1. 将用户请求先拆成原子任务。
+2. 若同一轮存在 >=2 个无依赖任务，优先合并到一个 `batch-run` 调用。
+3. 若有依赖链，按阶段执行；每个阶段内部仍尽量合并为单次 `batch-run`。
+4. 把重复参数放到 `defaults`，只在 `tasks[].args` 传差异参数。
+
+这个流程可以显著减少多轮上下文重复与命令重复带来的 token 消耗。
+
+## 批量任务（降低 token 消耗）
+
+当一次有多个独立任务时，建议改用单次 `batch-run`，避免多轮重复请求。
+
+```bash
+python scripts/xhs_api_client.py --ip 127.0.0.1 batch-run \
+  --batch-file examples/batch_tasks.json
+```
+
+批任务文件结构示例：
+
+```json
+{
+  "defaults": {
+    "user_id": "user1"
+  },
+  "tasks": [
+    {"id": "search-1", "operation": "search-feeds", "args": {"keyword": "露营"}},
+    {"id": "like-1", "operation": "like_feed", "body_file": "like_body.json"}
+  ]
+}
+```
+
+说明：
+- `defaults`：批次共享参数，减少重复传参。
+- `tasks[].args`：子任务参数，键名支持 `-` / `_`。
+- `tasks[].body` / `tasks[].body_file`：复杂请求体。
+- 可选 `--fail-fast`：遇错立即停止，默认继续执行并汇总结果。
+
 ## 参数说明（重点）
 
 - `--ip`：必填，用户只需提供此项。
 - `--manager-port`：可选，默认 `18050`。
 - `--user-id`：可选，指定用户实例。
 - `--user-port`：可选，手动指定业务端口，优先级最高。
-- `--body` / `--body-file`：用于复杂 JSON 请求。
+- `--body` / `--body-file`：用于单任务复杂 JSON 请求。
+- `--batch-file`：批量模式任务文件（仅 `batch-run` 使用）。
+- `--fail-fast`：批量模式失败即停（默认不中断）。
 
 ## 能力映射
 
@@ -133,3 +175,4 @@ python scripts/xhs_api_client.py --ip 127.0.0.1 favorite_feed \
 
 - 已适配能力（登录/发布/搜索/详情/评论/用户/多用户）。
 - API 暂不支持能力（如 CDP 调试类、content-data、mentions、账号增删切换）。
+

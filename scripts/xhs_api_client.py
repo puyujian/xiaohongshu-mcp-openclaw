@@ -14,12 +14,63 @@ from urllib import error, parse, request
 DEFAULT_MANAGER_PORT = 18050
 DEFAULT_TIMEOUT = 60
 
+TASK_BOOL_FIELDS = {
+    "is_original",
+    "load_all_comments",
+    "click_more_replies",
+    "unlike",
+    "unfavorite",
+}
+TASK_INT_FIELDS = {
+    "manager_port",
+    "user_port",
+    "timeout",
+    "max_replies_threshold",
+    "max_comment_items",
+}
+TASK_OPTION_DEFAULTS: dict[str, Any] = {
+    "keyword": None,
+    "sort_by": None,
+    "note_type": None,
+    "publish_time": None,
+    "search_scope": None,
+    "location": None,
+    "title": None,
+    "content": None,
+    "images": None,
+    "video": None,
+    "tags": None,
+    "products": None,
+    "visibility": None,
+    "is_original": False,
+    "feed_id": None,
+    "xsec_token": None,
+    "comment_id": None,
+    "target_user_id": None,
+    "comment_content": None,
+    "unlike": False,
+    "unfavorite": False,
+    "profile_user_id": None,
+    "load_all_comments": False,
+    "click_more_replies": False,
+    "max_replies_threshold": None,
+    "max_comment_items": None,
+    "scroll_speed": None,
+}
+TASK_CONFIG_KEYS = set(TASK_OPTION_DEFAULTS.keys()) | {
+    "ip",
+    "manager_port",
+    "user_id",
+    "user_port",
+    "timeout",
+}
+
 
 @dataclass(frozen=True)
 class Operation:
     method: str
     path: str
-    scope: str  # manager | service
+    scope: str  # manager | service | local
     needs_user_id: bool = False
     unsupported_reason: str | None = None
 
@@ -46,6 +97,7 @@ CANONICAL_OPERATIONS: dict[str, Operation] = {
     "manager-user": Operation(
         "GET", "/api/manager/v1/users/{user_id}", "manager", needs_user_id=True
     ),
+    "batch-run": Operation("BATCH", "", "local"),
     "not-supported": Operation(
         "UNSUPPORTED",
         "",
@@ -77,6 +129,8 @@ OPERATION_ALIASES: dict[str, str] = {
     "comment-reply": "comment-reply",
     "manager-users": "manager-users",
     "manager-user": "manager-user",
+    "batch-run": "batch-run",
+    "batch": "batch-run",
     # 兼容 XiaohongshuSkills 命名风格
     "check-login": "login-status",
     "check-home-login": "login-status",
@@ -235,6 +289,17 @@ def build_url(base_url: str, path: str, query: dict[str, str] | None = None) -> 
     return url
 
 
+def load_json_file(file_path: Path, source: str) -> Any:
+    try:
+        content = file_path.read_text(encoding="utf-8-sig")
+    except OSError as exc:
+        raise ValueError(f"读取 {source} 失败: {exc}") from exc
+    try:
+        return json.loads(content)
+    except json.JSONDecodeError as exc:
+        raise ValueError(f"{source} 不是合法 JSON: {exc}") from exc
+
+
 def load_body(body: str | None, body_file: str | None) -> Any | None:
     if body and body_file:
         raise ValueError("--body 和 --body-file 不能同时使用。")
@@ -244,11 +309,7 @@ def load_body(body: str | None, body_file: str | None) -> Any | None:
         except json.JSONDecodeError as exc:
             raise ValueError(f"--body 不是合法 JSON: {exc}") from exc
     if body_file:
-        content = Path(body_file).read_text(encoding="utf-8")
-        try:
-            return json.loads(content)
-        except json.JSONDecodeError as exc:
-            raise ValueError(f"--body-file 内容不是合法 JSON: {exc}") from exc
+        return load_json_file(Path(body_file), "--body-file")
     return None
 
 
@@ -607,6 +668,277 @@ def build_request(
     return method, path, query, payload
 
 
+def normalize_task_value(key: str, value: Any, source: str) -> Any:
+    if key in TASK_BOOL_FIELDS:
+        if isinstance(value, bool):
+            return value
+        if isinstance(value, str):
+            normalized = value.strip().lower()
+            if normalized in {"true", "1", "yes", "y"}:
+                return True
+            if normalized in {"false", "0", "no", "n"}:
+                return False
+        raise ValueError(f"{source} 必须是布尔值。")
+
+    if key in TASK_INT_FIELDS:
+        if value is None:
+            return None
+        if isinstance(value, bool):
+            raise ValueError(f"{source} 必须是整数。")
+        try:
+            return int(value)
+        except (TypeError, ValueError) as exc:
+            raise ValueError(f"{source} 必须是整数。") from exc
+
+    if key == "ip":
+        if not isinstance(value, str) or not value.strip():
+            raise ValueError(f"{source} 必须是非空字符串。")
+        return value.strip()
+
+    if value is None:
+        return None
+    if not isinstance(value, str):
+        raise ValueError(f"{source} 必须是字符串。")
+    return value
+
+
+def normalize_task_config(raw: Any, source: str) -> dict[str, Any]:
+    if raw is None:
+        return {}
+    if not isinstance(raw, dict):
+        raise ValueError(f"{source} 必须是 JSON 对象。")
+
+    normalized: dict[str, Any] = {}
+    for raw_key, raw_value in raw.items():
+        if not isinstance(raw_key, str) or not raw_key.strip():
+            raise ValueError(f"{source} 存在非法字段名。")
+        key = raw_key.replace("-", "_").strip()
+        if key not in TASK_CONFIG_KEYS:
+            raise ValueError(f"{source} 包含不支持字段: {raw_key}")
+        normalized[key] = normalize_task_value(key, raw_value, f"{source}.{raw_key}")
+    return normalized
+
+
+def base_task_args(cli_args: argparse.Namespace) -> dict[str, Any]:
+    values = dict(TASK_OPTION_DEFAULTS)
+    values.update(
+        {
+            "ip": cli_args.ip,
+            "manager_port": cli_args.manager_port,
+            "user_id": cli_args.user_id,
+            "user_port": cli_args.user_port,
+            "timeout": cli_args.timeout,
+        }
+    )
+    return values
+
+
+def load_task_body(task: dict[str, Any], batch_base_dir: Path, index: int) -> Any | None:
+    has_body = "body" in task
+    has_body_file = "body_file" in task
+    if has_body and has_body_file:
+        raise ValueError(f"tasks[{index}] 不能同时设置 body 和 body_file。")
+    if has_body:
+        return task.get("body")
+    if has_body_file:
+        raw_body_file = task.get("body_file")
+        if not isinstance(raw_body_file, str) or not raw_body_file.strip():
+            raise ValueError(f"tasks[{index}].body_file 必须是非空字符串。")
+        body_path = Path(raw_body_file.strip())
+        if not body_path.is_absolute():
+            body_path = (batch_base_dir / body_path).resolve()
+        return load_json_file(body_path, f"tasks[{index}].body_file")
+    return None
+
+
+def resolve_operation(operation_alias: str) -> tuple[str, Operation]:
+    canonical_operation = OPERATION_ALIASES.get(operation_alias)
+    if canonical_operation is None:
+        raise ValueError(f"未知操作: {operation_alias}")
+    operation_def = CANONICAL_OPERATIONS[canonical_operation]
+    if operation_def.unsupported_reason:
+        raise ValueError(
+            f"操作 {operation_alias} 暂不支持：{operation_def.unsupported_reason}"
+        )
+    return canonical_operation, operation_def
+
+
+def execute_operation(
+    operation_alias: str,
+    args: argparse.Namespace,
+    body: Any | None,
+    route_cache: dict[tuple[str, int, str | None, int | None], tuple[int, dict[str, Any]]]
+    | None = None,
+) -> dict[str, Any]:
+    canonical_operation, operation_def = resolve_operation(operation_alias)
+    if canonical_operation == "batch-run":
+        raise ValueError("batch-run 不能作为子任务 operation。")
+
+    host = normalize_host(args.ip)
+    method, path, query, payload = build_request(
+        operation=canonical_operation,
+        args=args,
+        body=body,
+    )
+
+    resolved_user: dict[str, Any] | None = None
+    route_cache_hit = False
+
+    if operation_def.scope == "manager":
+        base_url = f"http://{host}:{args.manager_port}"
+    elif operation_def.scope == "service":
+        cache_key = (host, args.manager_port, args.user_id, args.user_port)
+        if route_cache is not None and cache_key in route_cache:
+            service_port, cached_user = route_cache[cache_key]
+            resolved_user = dict(cached_user)
+            route_cache_hit = True
+        else:
+            service_port, resolved = resolve_service_user(
+                host=host,
+                manager_port=args.manager_port,
+                timeout=args.timeout,
+                user_id=args.user_id,
+                user_port=args.user_port,
+            )
+            resolved_user = dict(resolved)
+            if route_cache is not None:
+                route_cache[cache_key] = (service_port, dict(resolved_user))
+        base_url = f"http://{host}:{service_port}"
+    else:
+        raise RuntimeError(f"操作 {operation_alias} 不是可执行 HTTP 操作。")
+
+    url = build_url(base_url, path, query)
+    response = http_json(url=url, method=method, timeout=args.timeout, payload=payload)
+
+    output: dict[str, Any] = {
+        "target": {
+            "operation_alias": operation_alias,
+            "canonical_operation": canonical_operation,
+            "host": host,
+            "base_url": base_url,
+            "method": method,
+            "path": path,
+            "url": url,
+        },
+        "response": response,
+    }
+    if payload is not None:
+        output["request_body"] = payload
+    if resolved_user is not None:
+        output["resolved_user"] = resolved_user
+    if operation_def.scope == "service" and route_cache is not None:
+        output["target"]["route_cache_hit"] = route_cache_hit
+    return output
+
+
+def execute_batch(args: argparse.Namespace) -> int:
+    if not args.batch_file:
+        raise ValueError("batch-run 需要 --batch-file。")
+    if args.body or args.body_file:
+        raise ValueError(
+            "batch-run 不支持 --body/--body-file，请在批任务 JSON 中为每个任务设置 body 或 body_file。"
+        )
+
+    batch_path = Path(args.batch_file)
+    if not batch_path.is_absolute():
+        batch_path = (Path.cwd() / batch_path).resolve()
+
+    batch_spec = load_json_file(batch_path, "--batch-file")
+    if not isinstance(batch_spec, dict):
+        raise ValueError("--batch-file 顶层必须是 JSON 对象。")
+
+    raw_tasks = batch_spec.get("tasks")
+    if not isinstance(raw_tasks, list) or len(raw_tasks) == 0:
+        raise ValueError("--batch-file 必须包含非空 tasks 数组。")
+
+    default_overrides = normalize_task_config(batch_spec.get("defaults"), "batch.defaults")
+    shared_task_args = base_task_args(args)
+    shared_task_args.update(default_overrides)
+
+    route_cache: dict[tuple[str, int, str | None, int | None], tuple[int, dict[str, Any]]] = {}
+    results: list[dict[str, Any]] = []
+
+    for index, raw_task in enumerate(raw_tasks, start=1):
+        task_id = f"task-{index}"
+        operation_alias: str | None = None
+        try:
+            if not isinstance(raw_task, dict):
+                raise ValueError(f"tasks[{index}] 必须是 JSON 对象。")
+
+            raw_task_id = raw_task.get("id")
+            if raw_task_id is not None:
+                if not isinstance(raw_task_id, str) or not raw_task_id.strip():
+                    raise ValueError(f"tasks[{index}].id 必须是非空字符串。")
+                task_id = raw_task_id.strip()
+
+            raw_operation = raw_task.get("operation")
+            if not isinstance(raw_operation, str) or not raw_operation.strip():
+                raise ValueError(f"tasks[{index}].operation 必须是非空字符串。")
+            operation_alias = raw_operation.strip()
+
+            task_overrides = normalize_task_config(raw_task.get("args"), f"tasks[{index}].args")
+            task_args_values = dict(shared_task_args)
+            task_args_values.update(task_overrides)
+            task_args = argparse.Namespace(**task_args_values)
+
+            task_body = load_task_body(raw_task, batch_path.parent, index)
+            task_output = execute_operation(
+                operation_alias=operation_alias,
+                args=task_args,
+                body=task_body,
+                route_cache=route_cache,
+            )
+            task_output["task_id"] = task_id
+            task_output["success"] = True
+            results.append(task_output)
+        except Exception as exc:  # noqa: BLE001
+            results.append(
+                {
+                    "task_id": task_id,
+                    "operation_alias": operation_alias,
+                    "success": False,
+                    "error": str(exc),
+                }
+            )
+            if args.fail_fast:
+                break
+
+    requested_total = len(raw_tasks)
+    executed_total = len(results)
+    success_total = sum(1 for item in results if item.get("success") is True)
+    failed_total = executed_total - success_total
+    skipped_total = requested_total - executed_total
+
+    route_cache_hits = 0
+    for item in results:
+        if item.get("success") is True:
+            target = item.get("target")
+            if isinstance(target, dict) and target.get("route_cache_hit") is True:
+                route_cache_hits += 1
+
+    output: dict[str, Any] = {
+        "target": {
+            "operation_alias": args.operation,
+            "canonical_operation": "batch-run",
+            "batch_file": str(batch_path),
+            "fail_fast": args.fail_fast,
+        },
+        "summary": {
+            "requested_total": requested_total,
+            "executed_total": executed_total,
+            "success_total": success_total,
+            "failed_total": failed_total,
+            "skipped_total": skipped_total,
+            "route_cache_entries": len(route_cache),
+            "route_cache_hits": route_cache_hits,
+        },
+        "results": results,
+    }
+
+    print(json.dumps(output, ensure_ascii=False, indent=2))
+    return 0 if failed_total == 0 else 1
+
+
 def create_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description=(
@@ -616,7 +948,7 @@ def create_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "operation",
         choices=sorted(OPERATION_ALIASES.keys()),
-        help="要执行的操作名（支持别名）",
+        help="要执行的操作名（支持别名，含 batch-run）",
     )
 
     parser.add_argument("--ip", required=True, help="服务 IP 或域名（用户仅需提供此项）")
@@ -666,6 +998,12 @@ def create_parser() -> argparse.ArgumentParser:
 
     parser.add_argument("--body", help="JSON 字符串请求体")
     parser.add_argument("--body-file", help="JSON 文件请求体")
+    parser.add_argument("--batch-file", help="batch-run 模式下的任务 JSON 文件")
+    parser.add_argument(
+        "--fail-fast",
+        action="store_true",
+        help="batch-run 模式下遇到失败即停止后续任务",
+    )
     parser.add_argument(
         "--timeout",
         type=int,
@@ -681,55 +1019,16 @@ def main() -> int:
 
     try:
         canonical_operation = OPERATION_ALIASES[args.operation]
-        operation_def = CANONICAL_OPERATIONS[canonical_operation]
+        if canonical_operation == "batch-run":
+            return execute_batch(args)
+
         body = load_body(args.body, args.body_file)
-
-        if operation_def.unsupported_reason:
-            raise ValueError(
-                f"操作 {args.operation} 暂不支持：{operation_def.unsupported_reason}"
-            )
-
-        host = normalize_host(args.ip)
-
-        method, path, query, payload = build_request(
-            operation=canonical_operation,
+        output = execute_operation(
+            operation_alias=args.operation,
             args=args,
             body=body,
+            route_cache=None,
         )
-
-        resolved_user: dict[str, Any] | None = None
-        if operation_def.scope == "manager":
-            base_url = f"http://{host}:{args.manager_port}"
-        else:
-            service_port, resolved_user = resolve_service_user(
-                host=host,
-                manager_port=args.manager_port,
-                timeout=args.timeout,
-                user_id=args.user_id,
-                user_port=args.user_port,
-            )
-            base_url = f"http://{host}:{service_port}"
-
-        url = build_url(base_url, path, query)
-        response = http_json(url=url, method=method, timeout=args.timeout, payload=payload)
-
-        output: dict[str, Any] = {
-            "target": {
-                "operation_alias": args.operation,
-                "canonical_operation": canonical_operation,
-                "host": host,
-                "base_url": base_url,
-                "method": method,
-                "path": path,
-                "url": url,
-            },
-            "response": response,
-        }
-        if payload is not None:
-            output["request_body"] = payload
-        if resolved_user is not None:
-            output["resolved_user"] = resolved_user
-
         print(json.dumps(output, ensure_ascii=False, indent=2))
         return 0
     except Exception as exc:  # noqa: BLE001
@@ -742,3 +1041,4 @@ def main() -> int:
 
 if __name__ == "__main__":
     sys.exit(main())
+

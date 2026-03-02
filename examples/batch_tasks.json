@@ -1,0 +1,33 @@
+﻿{
+  "defaults": {
+    "user_id": "user1",
+    "timeout": 60
+  },
+  "tasks": [
+    {
+      "id": "search-camp",
+      "operation": "search-feeds",
+      "args": {
+        "keyword": "露营",
+        "sort_by": "最新",
+        "note_type": "图文"
+      }
+    },
+    {
+      "id": "detail-1",
+      "operation": "get-feed-detail",
+      "body_file": "feed_detail_body.json"
+    },
+    {
+      "id": "like-1",
+      "operation": "like_feed",
+      "body_file": "like_body.json"
+    },
+    {
+      "id": "comment-1",
+      "operation": "post-comment-to-feed",
+      "body_file": "comment_body.json"
+    }
+  ]
+}
+

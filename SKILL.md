@@ -31,6 +31,68 @@ metadata: {"openclaw":{"emoji":"📕","requires":{"anyBins":["python3","python"]
 4. 复杂请求优先使用 `--body-file`。
 5. 返回结果里的 `resolved_user` 要作为后续链路默认上下文。
 
+## 批量执行（降 token）
+
+1. 当用户一次提出 >=2 个彼此独立的小红书任务时，优先使用 `batch-run`，避免逐条重复调用。
+2. 将共同参数放入 `defaults`：`ip`、`manager_port`、`user_id`、`user_port`、`timeout`。
+3. 每个子任务写入 `tasks[]`：
+   - `operation`：命令别名（如 `search-feeds`、`like_feed`）。
+   - `args`：该子任务特有参数（支持 `-` 或 `_` 命名）。
+   - `body` 或 `body_file`：复杂请求体。
+4. 默认批任务会继续执行并汇总失败项；需要失败即停时加 `--fail-fast`。
+5. 若多个子任务共用同一用户路由，脚本会自动复用解析结果，减少重复请求。
+
+### 批量调用模板
+
+```bash
+python "{baseDir}/scripts/xhs_api_client.py" --ip 192.168.1.8 batch-run \
+  --batch-file "{baseDir}/examples/batch_tasks.json"
+```
+
+## OpenClaw 执行决策（强约束）
+
+1. 先做任务拆解：把用户请求拆成最小原子任务（一个任务对应一个 operation）。
+2. 决策规则：
+   - 仅 1 个任务：允许单命令调用。
+   - >=2 个且互不依赖：必须使用 `batch-run`，禁止逐条单独调用。
+   - 存在依赖链（A→B→C）：按阶段执行；每个阶段内部能并行的任务仍必须用 `batch-run`。
+3. 组包规则：
+   - 把重复参数放进 `defaults`（如 `ip/user_id/timeout`）。
+   - 每个 `tasks[i].args` 仅保留差异参数。
+   - 复杂请求优先使用 `body_file`，避免长 JSON 内联导致 token 增长。
+4. 执行与回传：
+   - 默认不使用 `--fail-fast`，先拿完整汇总；除非用户明确要求失败即停。
+   - 优先读取 `summary.failed_total` 与 `results[].task_id` 输出失败清单。
+   - 成功任务若包含 `resolved_user`，后续阶段沿用该上下文。
+5. 禁止事项：
+   - 在可批量场景下，禁止“同一轮多次调用 `xhs_api_client.py` 单任务命令”。
+   - 禁止在 `batch-run` 外层使用 `--body` / `--body-file`。
+
+### 批量文件最小模板
+
+```json
+{
+  "defaults": {
+    "user_id": "user1",
+    "timeout": 60
+  },
+  "tasks": [
+    {
+      "id": "t1",
+      "operation": "search-feeds",
+      "args": {
+        "keyword": "露营"
+      }
+    },
+    {
+      "id": "t2",
+      "operation": "like_feed",
+      "body_file": "like_body.json"
+    }
+  ]
+}
+```
+
 ## 对齐后的命令风格
 
 以下命令名已兼容 `XiaohongshuSkills` 风格：
@@ -63,6 +125,7 @@ metadata: {"openclaw":{"emoji":"📕","requires":{"anyBins":["python3","python"]
 - `get-notification-mentions`（会返回“API 暂不支持”）
 - `manager-list-users`
 - `manager-get-user`
+- `batch-run`（批量执行）
 
 ## 快速调用模板
 
@@ -110,3 +173,4 @@ python "{baseDir}/scripts/xhs_api_client.py" --ip 192.168.1.8 favorite_feed \
 - 本 Skill 基于 HTTP API，不含浏览器 CDP 调试类命令。
 - `content-data`、`notifications/mentions`、账号新增/删除/切换 在当前 API 文档中未提供端点，调用时会返回明确错误提示。
 - 详细映射见：`{baseDir}/CAPABILITY_MAP.md`。
+
