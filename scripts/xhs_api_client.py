@@ -36,6 +36,8 @@ CANONICAL_OPERATIONS: dict[str, Operation] = {
     "feeds-search-post": Operation("POST", "/api/v1/feeds/search", "service"),
     "search-feeds": Operation("AUTO", "/api/v1/feeds/search", "service"),
     "feed-detail": Operation("POST", "/api/v1/feeds/detail", "service"),
+    "like-feed": Operation("POST", "/api/v1/feeds/like", "service"),
+    "favorite-feed": Operation("POST", "/api/v1/feeds/favorite", "service"),
     "user-profile": Operation("POST", "/api/v1/user/profile", "service"),
     "user-me": Operation("GET", "/api/v1/user/me", "service"),
     "comment": Operation("POST", "/api/v1/feeds/comment", "service"),
@@ -67,6 +69,8 @@ OPERATION_ALIASES: dict[str, str] = {
     "feeds-search-post": "feeds-search-post",
     "search-feeds": "search-feeds",
     "feed-detail": "feed-detail",
+    "like-feed": "like-feed",
+    "favorite-feed": "favorite-feed",
     "user-profile": "user-profile",
     "user-me": "user-me",
     "comment": "comment",
@@ -87,6 +91,8 @@ OPERATION_ALIASES: dict[str, str] = {
     "get-feed-detail": "feed-detail",
     "post-comment-to-feed": "comment",
     "reply-comment-to-feed": "comment-reply",
+    "like_feed": "like-feed",
+    "favorite_feed": "favorite-feed",
     "get-user-profile": "user-profile",
     "get-my-profile": "user-me",
     "list-accounts": "manager-users",
@@ -323,6 +329,18 @@ def validate_body(operation: str, body: Any) -> dict[str, Any]:
         if not payload.get("comment_id") and not payload.get("user_id"):
             raise ValueError("comment-reply 需要 comment_id 或 user_id 至少一个。")
 
+    if operation == "like-feed":
+        if not payload.get("feed_id"):
+            raise ValueError("like-feed 缺少 feed_id。")
+        if not payload.get("xsec_token"):
+            raise ValueError("like-feed 缺少 xsec_token。")
+
+    if operation == "favorite-feed":
+        if not payload.get("feed_id"):
+            raise ValueError("favorite-feed 缺少 feed_id。")
+        if not payload.get("xsec_token"):
+            raise ValueError("favorite-feed 缺少 xsec_token。")
+
     if operation in {"feeds-search-post", "search-feeds"} and not payload.get("keyword"):
         raise ValueError(f"{operation} 缺少 keyword。")
 
@@ -459,6 +477,32 @@ def build_reply_comment_body(args: argparse.Namespace) -> dict[str, Any]:
     return body
 
 
+def build_like_feed_body(args: argparse.Namespace) -> dict[str, Any]:
+    feed_id = (args.feed_id or "").strip()
+    xsec_token = (args.xsec_token or "").strip()
+    if not feed_id:
+        raise ValueError("like-feed 需要 --feed-id。")
+    if not xsec_token:
+        raise ValueError("like-feed 需要 --xsec-token。")
+    body: dict[str, Any] = {"feed_id": feed_id, "xsec_token": xsec_token}
+    if args.unlike:
+        body["unlike"] = True
+    return body
+
+
+def build_favorite_feed_body(args: argparse.Namespace) -> dict[str, Any]:
+    feed_id = (args.feed_id or "").strip()
+    xsec_token = (args.xsec_token or "").strip()
+    if not feed_id:
+        raise ValueError("favorite-feed 需要 --feed-id。")
+    if not xsec_token:
+        raise ValueError("favorite-feed 需要 --xsec-token。")
+    body: dict[str, Any] = {"feed_id": feed_id, "xsec_token": xsec_token}
+    if args.unfavorite:
+        body["unfavorite"] = True
+    return body
+
+
 def build_search_request(
     args: argparse.Namespace,
     body: Any | None,
@@ -551,6 +595,15 @@ def build_request(
     elif operation == "comment-reply":
         payload = validate_body(operation, body if body is not None else build_reply_comment_body(args))
 
+    elif operation == "like-feed":
+        payload = validate_body(operation, body if body is not None else build_like_feed_body(args))
+
+    elif operation == "favorite-feed":
+        payload = validate_body(
+            operation,
+            body if body is not None else build_favorite_feed_body(args),
+        )
+
     return method, path, query, payload
 
 
@@ -597,6 +650,8 @@ def create_parser() -> argparse.ArgumentParser:
     parser.add_argument("--comment-id", help="评论 ID")
     parser.add_argument("--target-user-id", help="回复目标用户 ID（对应 user_id）")
     parser.add_argument("--comment-content", help="评论/回复内容")
+    parser.add_argument("--unlike", action="store_true", help="点赞接口中执行取消点赞")
+    parser.add_argument("--unfavorite", action="store_true", help="收藏接口中执行取消收藏")
     parser.add_argument("--profile-user-id", help="用户主页查询用 user_id")
 
     parser.add_argument("--load-all-comments", action="store_true", help="加载全部评论")

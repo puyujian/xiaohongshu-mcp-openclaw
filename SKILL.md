@@ -49,6 +49,10 @@ metadata: {"openclaw":{"emoji":"📕","requires":{"anyBins":["python3","python"]
 - `get-feed-detail`
 - `post-comment-to-feed`
 - `reply-comment-to-feed`
+- `like_feed`
+- `favorite_feed`
+- `like-feed`
+- `favorite-feed`
 - `get-user-profile`
 - `get-my-profile`
 - `list-accounts`
@@ -87,6 +91,18 @@ python "{baseDir}/scripts/xhs_api_client.py" --ip 192.168.1.8 search-feeds \
 # 6) 获取详情（需要 xsec_token）
 python "{baseDir}/scripts/xhs_api_client.py" --ip 192.168.1.8 get-feed-detail \
   --feed-id "64f1a2..." --xsec-token "token_here"
+
+# 7) 点赞/取消点赞
+python "{baseDir}/scripts/xhs_api_client.py" --ip 192.168.1.8 like_feed \
+  --feed-id "64f1a2..." --xsec-token "token_here"
+python "{baseDir}/scripts/xhs_api_client.py" --ip 192.168.1.8 like_feed \
+  --feed-id "64f1a2..." --xsec-token "token_here" --unlike
+
+# 8) 收藏/取消收藏
+python "{baseDir}/scripts/xhs_api_client.py" --ip 192.168.1.8 favorite_feed \
+  --feed-id "64f1a2..." --xsec-token "token_here"
+python "{baseDir}/scripts/xhs_api_client.py" --ip 192.168.1.8 favorite_feed \
+  --feed-id "64f1a2..." --xsec-token "token_here" --unfavorite
 ```
 
 ## 能力边界

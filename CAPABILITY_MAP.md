@@ -52,17 +52,27 @@
 - 适配命令：`reply-comment-to-feed` / `comment-reply`
 - API：`POST /api/v1/feeds/comment/reply`
 
-11. 用户主页
+11. 点赞/取消点赞
+- 外部能力：`like_feed`
+- 适配命令：`like_feed` / `like-feed`
+- API：`POST /api/v1/feeds/like`
+
+12. 收藏/取消收藏
+- 外部能力：`favorite_feed`
+- 适配命令：`favorite_feed` / `favorite-feed`
+- API：`POST /api/v1/feeds/favorite`
+
+13. 用户主页
 - 外部能力：`get-user-profile`
 - 适配命令：`get-user-profile` / `user-profile`
 - API：`POST /api/v1/user/profile`
 
-12. 我的主页
+14. 我的主页
 - 外部能力：`get-my-profile`
 - 适配命令：`get-my-profile` / `user-me`
 - API：`GET /api/v1/user/me`
 
-13. 多用户管理（增强）
+15. 多用户管理（增强）
 - 外部能力：`list-accounts`
 - 适配命令：`list-accounts` / `manager-list-users` / `manager-get-user`
 - API：`GET /api/manager/v1/users`、`GET /api/manager/v1/users/{id}`

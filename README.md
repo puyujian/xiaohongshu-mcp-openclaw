@@ -17,7 +17,9 @@ xiaohongshu-mcp-openclaw/
 ├── README.md
 ├── examples/
 │   ├── comment_body.json
+│   ├── favorite_body.json
 │   ├── feed_detail_body.json
+│   ├── like_body.json
 │   ├── publish_body.json
 │   ├── publish_video_body.json
 │   ├── reply_comment_body.json
@@ -56,6 +58,10 @@ python scripts/xhs_api_client.py --ip 127.0.0.1 --user-id user1 list-feeds
 - `get-feed-detail`
 - `post-comment-to-feed`
 - `reply-comment-to-feed`
+- `like_feed`
+- `favorite_feed`
+- `like-feed`
+- `favorite-feed`
 - `get-user-profile`
 - `get-my-profile`
 - `list-accounts`
@@ -99,6 +105,18 @@ python scripts/xhs_api_client.py --ip 127.0.0.1 post-comment-to-feed \
 
 python scripts/xhs_api_client.py --ip 127.0.0.1 reply-comment-to-feed \
   --feed-id "64f1a2..." --xsec-token "token_here" --comment-id "comment_id" --comment-content "谢谢"
+
+# 点赞与取消点赞
+python scripts/xhs_api_client.py --ip 127.0.0.1 like_feed \
+  --feed-id "64f1a2..." --xsec-token "token_here"
+python scripts/xhs_api_client.py --ip 127.0.0.1 like_feed \
+  --feed-id "64f1a2..." --xsec-token "token_here" --unlike
+
+# 收藏与取消收藏
+python scripts/xhs_api_client.py --ip 127.0.0.1 favorite_feed \
+  --feed-id "64f1a2..." --xsec-token "token_here"
+python scripts/xhs_api_client.py --ip 127.0.0.1 favorite_feed \
+  --feed-id "64f1a2..." --xsec-token "token_here" --unfavorite
 ```
 
 ## 参数说明（重点）
