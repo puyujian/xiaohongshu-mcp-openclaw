@@ -29,6 +29,7 @@ TASK_INT_FIELDS = {
     "max_comment_items",
 }
 TASK_OPTION_DEFAULTS: dict[str, Any] = {
+    "proxy": None,
     "keyword": None,
     "sort_by": None,
     "note_type": None,
@@ -97,6 +98,13 @@ CANONICAL_OPERATIONS: dict[str, Operation] = {
     "manager-user": Operation(
         "GET", "/api/manager/v1/users/{user_id}", "manager", needs_user_id=True
     ),
+    "manager-create-user": Operation("POST", "/api/admin/v1/users", "manager"),
+    "manager-update-user": Operation(
+        "PUT", "/api/admin/v1/users/{user_id}", "manager", needs_user_id=True
+    ),
+    "manager-delete-user": Operation(
+        "DELETE", "/api/admin/v1/users/{user_id}", "manager", needs_user_id=True
+    ),
     "batch-run": Operation("BATCH", "", "local"),
     "not-supported": Operation(
         "UNSUPPORTED",
@@ -129,6 +137,9 @@ OPERATION_ALIASES: dict[str, str] = {
     "comment-reply": "comment-reply",
     "manager-users": "manager-users",
     "manager-user": "manager-user",
+    "manager-create-user": "manager-create-user",
+    "manager-update-user": "manager-update-user",
+    "manager-delete-user": "manager-delete-user",
     "batch-run": "batch-run",
     "batch": "batch-run",
     # 兼容 XiaohongshuSkills 命名风格
@@ -150,8 +161,12 @@ OPERATION_ALIASES: dict[str, str] = {
     "get-user-profile": "user-profile",
     "get-my-profile": "user-me",
     "list-accounts": "manager-users",
-    "add-account": "not-supported",
-    "remove-account": "not-supported",
+    "add-account": "manager-create-user",
+    "create-account": "manager-create-user",
+    "edit-account": "manager-update-user",
+    "update-account": "manager-update-user",
+    "remove-account": "manager-delete-user",
+    "delete-account": "manager-delete-user",
     "switch-account": "not-supported",
     "get-notification-mentions": "not-supported",
     "get_notification_mentions": "not-supported",
@@ -402,6 +417,32 @@ def validate_body(operation: str, body: Any) -> dict[str, Any]:
         if not payload.get("xsec_token"):
             raise ValueError("favorite-feed 缺少 xsec_token。")
 
+    if operation == "manager-create-user":
+        if not str(payload.get("id") or "").strip():
+            raise ValueError("manager-create-user 缺少 id。")
+        port = payload.get("port")
+        if not isinstance(port, int) or port <= 0:
+            raise ValueError("manager-create-user 缺少合法 port。")
+        proxy = payload.get("proxy", "")
+        if proxy is None:
+            payload["proxy"] = ""
+        elif not isinstance(proxy, str):
+            raise ValueError("manager-create-user 的 proxy 必须是字符串。")
+        else:
+            payload["proxy"] = proxy.strip()
+
+    if operation == "manager-update-user":
+        port = payload.get("port")
+        if not isinstance(port, int) or port <= 0:
+            raise ValueError("manager-update-user 缺少合法 port。")
+        proxy = payload.get("proxy", "")
+        if proxy is None:
+            payload["proxy"] = ""
+        elif not isinstance(proxy, str):
+            raise ValueError("manager-update-user 的 proxy 必须是字符串。")
+        else:
+            payload["proxy"] = proxy.strip()
+
     if operation in {"feeds-search-post", "search-feeds"} and not payload.get("keyword"):
         raise ValueError(f"{operation} 缺少 keyword。")
 
@@ -564,6 +605,26 @@ def build_favorite_feed_body(args: argparse.Namespace) -> dict[str, Any]:
     return body
 
 
+def build_manager_create_user_body(args: argparse.Namespace) -> dict[str, Any]:
+    user_id = (args.user_id or "").strip()
+    proxy = (args.proxy or "").strip()
+    if not user_id:
+        raise ValueError("manager-create-user 需要 --user-id。")
+    if args.user_port is None:
+        raise ValueError("manager-create-user 需要 --user-port。")
+    return {"id": user_id, "port": args.user_port, "proxy": proxy}
+
+
+def build_manager_update_user_body(args: argparse.Namespace) -> dict[str, Any]:
+    if not (args.user_id or "").strip():
+        raise ValueError("manager-update-user 需要 --user-id。")
+    if args.user_port is None:
+        raise ValueError(
+            "manager-update-user 需要 --user-port；如需自定义请求体可使用 --body/--body-file。"
+        )
+    return {"port": args.user_port, "proxy": (args.proxy or "").strip()}
+
+
 def build_search_request(
     args: argparse.Namespace,
     body: Any | None,
@@ -609,12 +670,13 @@ def build_request(
     query: dict[str, str] = {}
     payload: dict[str, Any] | None = None
 
-    if operation == "manager-user":
-        if not args.user_id:
-            raise ValueError("manager-user 需要 --user-id。")
-        path = path.replace("{user_id}", parse.quote(args.user_id))
+    if op.needs_user_id:
+        user_id = (args.user_id or "").strip()
+        if not user_id:
+            raise ValueError(f"{operation} 需要 --user-id。")
+        path = path.replace("{user_id}", parse.quote(user_id))
 
-    elif operation == "feeds-search-get":
+    if operation == "feeds-search-get":
         keyword = (args.keyword or "").strip()
         if not keyword:
             raise ValueError("feeds-search-get 需要 --keyword。")
@@ -663,6 +725,18 @@ def build_request(
         payload = validate_body(
             operation,
             body if body is not None else build_favorite_feed_body(args),
+        )
+
+    elif operation == "manager-create-user":
+        payload = validate_body(
+            operation,
+            body if body is not None else build_manager_create_user_body(args),
+        )
+
+    elif operation == "manager-update-user":
+        payload = validate_body(
+            operation,
+            body if body is not None else build_manager_update_user_body(args),
         )
 
     return method, path, query, payload
@@ -960,6 +1034,7 @@ def create_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--user-id", help="目标用户 ID（用于 manager-user 或路由到指定用户）")
     parser.add_argument("--user-port", type=int, help="直接指定业务端口（可选）")
+    parser.add_argument("--proxy", help="账号代理地址（用于 add-account / edit-account）")
 
     parser.add_argument("--keyword", help="搜索关键词")
     parser.add_argument("--sort-by", help="搜索排序，如 综合/最新/最多点赞")

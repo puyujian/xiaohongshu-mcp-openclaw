@@ -66,16 +66,20 @@ python scripts/xhs_api_client.py --ip 127.0.0.1 --user-id user1 list-feeds
 - `get-user-profile`
 - `get-my-profile`
 - `list-accounts`
+- `add-account`
+- `edit-account`
+- `remove-account`
 - `manager-list-users`
 - `manager-get-user`
+- `manager-create-user`
+- `manager-update-user`
+- `manager-delete-user`
 - `batch-run`（批量执行）
 
 也保留了旧命名（如 `login-status`、`feeds-list`、`comment`）以兼容已有调用。
 
 以下同名命令也已接入，但会返回明确的“不支持”错误（因为 API 无对应端点）：
 
-- `add-account`
-- `remove-account`
 - `switch-account`
 - `content-data`
 - `get-notification-mentions`
@@ -100,6 +104,17 @@ python scripts/xhs_api_client.py --ip 127.0.0.1 publish-video-to-xiaohongshu \
 # 自动搜索（无筛选走 GET，有筛选走 POST）
 python scripts/xhs_api_client.py --ip 127.0.0.1 search-feeds --keyword "露营"
 python scripts/xhs_api_client.py --ip 127.0.0.1 search-feeds --keyword "露营" --sort-by "最新" --note-type "图文"
+
+# 新增账号
+python scripts/xhs_api_client.py --ip 127.0.0.1 add-account \
+  --user-id user3 --user-port 18062 --proxy "http://127.0.0.1:7890"
+
+# 编辑账号
+python scripts/xhs_api_client.py --ip 127.0.0.1 edit-account \
+  --user-id user3 --user-port 18063 --proxy ""
+
+# 删除账号
+python scripts/xhs_api_client.py --ip 127.0.0.1 remove-account --user-id user3
 
 # 评论与回复（需要 xsec_token）
 python scripts/xhs_api_client.py --ip 127.0.0.1 post-comment-to-feed \
@@ -165,6 +180,7 @@ python scripts/xhs_api_client.py --ip 127.0.0.1 batch-run \
 - `--manager-port`：可选，默认 `18050`。
 - `--user-id`：可选，指定用户实例。
 - `--user-port`：可选，手动指定业务端口，优先级最高。
+- `--proxy`：可选，账号代理地址；账号编辑时传空字符串可清空代理。
 - `--body` / `--body-file`：用于单任务复杂 JSON 请求。
 - `--batch-file`：批量模式任务文件（仅 `batch-run` 使用）。
 - `--fail-fast`：批量模式失败即停（默认不中断）。
@@ -174,5 +190,5 @@ python scripts/xhs_api_client.py --ip 127.0.0.1 batch-run \
 请看 `CAPABILITY_MAP.md`，包含：
 
 - 已适配能力（登录/发布/搜索/详情/评论/用户/多用户）。
-- API 暂不支持能力（如 CDP 调试类、content-data、mentions、账号增删切换）。
+- API 暂不支持能力（如 CDP 调试类、content-data、mentions、账号切换）。
 
