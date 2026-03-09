@@ -74,6 +74,7 @@ python scripts/xhs_api_client.py --ip 127.0.0.1 --user-id user1 list-feeds
 - `manager-create-user`
 - `manager-update-user`
 - `manager-delete-user`
+- `get-notification-mentions`
 - `batch-run`（批量执行）
 
 也保留了旧命名（如 `login-status`、`feeds-list`、`comment`）以兼容已有调用。
@@ -82,7 +83,6 @@ python scripts/xhs_api_client.py --ip 127.0.0.1 --user-id user1 list-feeds
 
 - `switch-account`
 - `content-data`
-- `get-notification-mentions`
 
 ## 命令示例
 
@@ -122,6 +122,9 @@ python scripts/xhs_api_client.py --ip 127.0.0.1 post-comment-to-feed \
 
 python scripts/xhs_api_client.py --ip 127.0.0.1 reply-comment-to-feed \
   --feed-id "64f1a2..." --xsec-token "token_here" --comment-id "comment_id" --comment-content "谢谢"
+
+# 获取通知页“评论和@”
+python scripts/xhs_api_client.py --ip 127.0.0.1 get-notification-mentions
 
 # 点赞与取消点赞
 python scripts/xhs_api_client.py --ip 127.0.0.1 like_feed \

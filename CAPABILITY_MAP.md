@@ -72,19 +72,24 @@
 - 适配命令：`get-my-profile` / `user-me`
 - API：`GET /api/v1/user/me`
 
-15. 多用户管理（增强）
+15. 评论和@通知
+- 外部能力：`get-notification-mentions`
+- 适配命令：`get-notification-mentions` / `get_notification_mentions` / `notification-mentions`
+- API：`GET /api/v1/notifications/mentions`
+
+16. 多用户管理（增强）
 - 外部能力：`list-accounts`
 - 适配命令：`list-accounts` / `manager-list-users` / `manager-get-user`
 - API：`GET /api/manager/v1/users`、`GET /api/manager/v1/users/{id}`
 - 增强点：用户仅传 IP，自动通过管理器解析实例端口。
 
-16. 账号增删改
+17. 账号增删改
 - 外部能力：`add-account`、`edit-account`、`remove-account`
 - 适配命令：`add-account` / `edit-account` / `remove-account` / `manager-create-user` / `manager-update-user` / `manager-delete-user`
 - API：`POST /api/admin/v1/users`、`PUT /api/admin/v1/users/{id}`、`DELETE /api/admin/v1/users/{id}`
 - 增强点：复用 `--user-id`、`--user-port`、`--proxy` 直接构造管理器写操作请求。
 
-17. 批量任务执行（本地聚合）
+18. 批量任务执行（本地聚合）
 - 外部能力：批量小红书任务拆解执行
 - 适配命令：`batch-run` / `batch`
 - API：本地聚合能力（内部仍调用上述 API）
@@ -99,11 +104,7 @@
 - 原因：`docs/API.md` 未定义对应端点。
  - 行为：命令可识别，执行时返回明确错误提示。
 
-3. `notifications/mentions` 提及列表
-- 原因：`docs/API.md` 未定义对应端点。
- - 行为：命令可识别（`get-notification-mentions`），执行时返回明确错误提示。
-
-4. 账号切换
+3. 账号切换
 - 原因：`docs/API.md` 未定义对应端点。
 - 行为：命令可识别（`switch-account`），执行时返回明确错误提示。
 

@@ -117,13 +117,13 @@ python "{baseDir}/scripts/xhs_api_client.py" --ip 192.168.1.8 batch-run \
 - `favorite-feed`
 - `get-user-profile`
 - `get-my-profile`
+- `get-notification-mentions`
 - `list-accounts`
 - `add-account`
 - `edit-account`
 - `remove-account`
 - `switch-account`（会返回“API 暂不支持”）
 - `content-data`（会返回“API 暂不支持”）
-- `get-notification-mentions`（会返回“API 暂不支持”）
 - `manager-list-users`
 - `manager-get-user`
 - `manager-create-user`
