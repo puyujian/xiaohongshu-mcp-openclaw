@@ -123,6 +123,8 @@ python scripts/xhs_api_client.py --ip 127.0.0.1 post-comment-to-feed \
 python scripts/xhs_api_client.py --ip 127.0.0.1 reply-comment-to-feed \
   --feed-id "64f1a2..." --xsec-token "token_here" --comment-id "comment_id" --comment-content "谢谢"
 
+# 如果 comment_id 来自通知页“评论和@”，直接传 get-notification-mentions 返回的 commentInfo.id
+
 # 获取通知页“评论和@”
 python scripts/xhs_api_client.py --ip 127.0.0.1 get-notification-mentions
 
